@@ -12,49 +12,77 @@
 
   html, body {
     width: 100%; height: 100%; overflow: hidden;
-    background: #000;
+    background: radial-gradient(circle at center, #050508 0%, #000000 100%);
     font-family: 'Inter', sans-serif;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
-  #scene { width: 100%; height: 100%; position: fixed; inset: 0; }
+  /* Faint noise texture for depth */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.03;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  #scene { width: 100%; height: 100%; position: fixed; inset: 0; z-index: 2; }
 
   /* Floating names — dropcap style */
   .name-label {
+    cursor: default;
+    backface-visibility: hidden;
+  }
+
+  .name-inner {
     font-family: 'Space Grotesk', sans-serif;
     font-size: 13px;
     font-weight: 400;
     color: #eee;
     text-align: center;
     white-space: nowrap;
-    cursor: default;
     letter-spacing: 0.2px;
-    backface-visibility: hidden;
-    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
-                transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity: 0;
+    transform: scale(1);
+    transition: opacity 0.5s ease,
+                transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  .name-label .dropcap {
+
+  .name-inner.visible {
+    opacity: 1;
+  }
+
+  .name-inner:hover {
+    transform: scale(1.05);
+  }
+
+  .name-label.eliminating .name-inner {
+    animation: eliminateAnim 0.7s cubic-bezier(0.4, 0, 1, 1) forwards;
+  }
+
+  @keyframes eliminateAnim {
+    0% { filter: brightness(1); opacity: 1; transform: scale(1); }
+    21% { filter: brightness(2); opacity: 1; transform: scale(1.1); }
+    100% { filter: brightness(1) blur(4px); opacity: 0; transform: scale(0.4); }
+  }
+
+  .dropcap {
     font-family: 'Jacquard 12', serif;
     font-size: 2em;
     font-weight: 400;
     line-height: 1;
     vertical-align: baseline;
   }
-  .name-label.eliminating {
-    opacity: 0 !important;
-    transform: scale(0.4) !important;
-    filter: blur(4px);
-    transition: opacity 0.7s cubic-bezier(0.4, 0, 1, 1),
-                transform 0.7s cubic-bezier(0.4, 0, 1, 1),
-                filter 0.7s ease;
-  }
 
   /* Button */
   .btn-area {
     position: fixed; bottom: 0; left: 0; width: 100%;
     display: flex; justify-content: center;
-    padding: 16px; z-index: 20; pointer-events: none;
+    padding: 32px; z-index: 20; pointer-events: none;
   }
+
   .pick-btn {
     pointer-events: all; cursor: pointer;
     font-size: 32px;
@@ -63,8 +91,9 @@
     padding: 0; border-radius: 0;
     line-height: 1;
     box-shadow: none;
+    outline: none;
     transition: transform 0.3s cubic-bezier(0.16,1,0.3,1),
-                box-shadow 0.3s ease, opacity 0.5s ease;
+                opacity 0.5s ease;
   }
   .pick-btn:hover {
     transform: scale(1.06);
@@ -86,42 +115,68 @@
   }
   .winner-overlay.active { opacity: 1; pointer-events: all; }
 
+  .winner-overlay::before {
+    content: "";
+    position: absolute; top: 50%; left: 50%;
+    width: 600px; height: 600px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, var(--winner-color) 0%, transparent 50%);
+    opacity: 0; pointer-events: none;
+    transition: opacity 1.5s ease;
+  }
+  .winner-overlay.active::before { opacity: 0.05; }
+
+  .winner-divider {
+    width: 40px; height: 1px;
+    background: rgba(255, 255, 255, 0.2);
+    margin-bottom: 24px;
+    opacity: 0; transform: translateY(10px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+  .winner-overlay.active .winner-divider {
+    opacity: 1; transform: translateY(0);
+    transition-delay: 0.1s;
+  }
+
   .winner-name {
     font-family: 'Space Grotesk', sans-serif;
     font-size: clamp(48px, 8vw, 90px); font-weight: 500;
     color: #eee; line-height: 1.15;
     text-align: center; padding: 0 24px;
-    opacity: 0; transform: translateY(24px) scale(0.95);
-    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
-                transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity: 0; transform: translateY(24px) scale(0.9);
+    position: relative; z-index: 2;
+    transition: opacity 1s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 1s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .winner-overlay.active .winner-name {
     opacity: 1; transform: translateY(0) scale(1);
-    transition-delay: 0.2s;
+    transition-delay: 0.3s;
   }
   .winner-name .dropcap {
     font-family: 'Jacquard 12', serif;
     font-size: 1.3em;
     font-weight: 400;
   }
+
   .reset-btn {
-    cursor: pointer; margin-top: 28px;
+    cursor: pointer; margin-top: 32px;
     font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 400;
     color: #666; background: transparent;
     border: 1px solid rgba(255,255,255,0.15); padding: 8px 22px; border-radius: 8px;
     letter-spacing: 1px; text-transform: uppercase;
     opacity: 0; transform: translateY(10px);
+    position: relative; z-index: 2; outline: none;
     transition: opacity 0.5s ease, transform 0.5s ease,
-                color 0.2s ease, border-color 0.2s ease;
+                color 0.3s ease, border-color 0.3s ease;
   }
   .winner-overlay.active .reset-btn {
-    opacity: 1; transform: translateY(0); transition-delay: 0.5s;
+    opacity: 1; transform: translateY(0); transition-delay: 0.6s;
   }
   .reset-btn:hover { color: #eee; border-color: rgba(255,255,255,0.4); }
 
   /* Count */
   .count {
-    position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+    position: fixed; top: 32px; left: 50%; transform: translateX(-50%);
     font-family: 'DM Mono', monospace; font-weight: 400;
     font-size: 11px; color: #aaa; letter-spacing: 2px; text-transform: uppercase;
     z-index: 20; pointer-events: none;
@@ -140,6 +195,7 @@
 </div>
 
 <div class="winner-overlay" id="winnerOverlay">
+  <div class="winner-divider"></div>
   <div class="winner-name" id="winnerName"></div>
   <button class="reset-btn" id="resetBtn">Again</button>
 </div>
@@ -171,22 +227,20 @@ const NAMES = [
   "Nina You","Eve Zheng"
 ];
 
-// Bauhaus dropcap colors
 const COLORS = [
   "#C1272D", "#1B3A8C", "#E8A623", "#D45B2C", "#2D6A4F",
   "#8B1E3F", "#3C5B9A", "#B5651D", "#CC5803", "#2B4570",
   "#A23B72", "#4A6741", "#D4A03C", "#C1272D", "#1B3A8C",
 ];
 
-// Build dropcap HTML: only first letter of first name is styled
-function makeDropcapHTML(name, colorIndex) {
+function getStyledDropcap(name, colorIndex, isWinner = false) {
   const color = COLORS[colorIndex % COLORS.length];
   const first = name[0];
   const rest = name.slice(1);
-  return `<span class="dropcap" style="color:${color}">${first}</span>${rest}`;
+  const shadow = isWinner ? `text-shadow: 0 0 30px ${color}80;` : '';
+  return `<span class="dropcap" style="color:${color}; ${shadow}">${first}</span>${rest}`;
 }
 
-// --- Scene ---
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 5000);
 camera.position.z = 780;
@@ -205,7 +259,6 @@ controls.enablePan = false;
 controls.autoRotate = true;
 controls.autoRotateSpeed = 0.5;
 
-// --- Sphere distribution ---
 const RADIUS = 310;
 const nameObjects = [];
 
@@ -225,7 +278,12 @@ function createNameObjects() {
   NAMES.forEach((name, i) => {
     const el = document.createElement('div');
     el.className = 'name-label';
-    el.innerHTML = makeDropcapHTML(name, i);
+    el.innerHTML = `<div class="name-inner">${getStyledDropcap(name, i)}</div>`;
+
+    const inner = el.querySelector('.name-inner');
+    setTimeout(() => {
+      if (inner) inner.classList.add('visible');
+    }, i * 20);
 
     const obj = new CSS3DObject(el);
     const pos = fibSphere(i, NAMES.length);
@@ -238,12 +296,12 @@ function createNameObjects() {
       basePos: pos.clone(),
       alive: true,
       velocity: new THREE.Vector3(0, 0, 0),
+      phaseOffset: Math.random() * Math.PI * 2
     });
   });
 }
 createNameObjects();
 
-// --- State ---
 let state = 'idle';
 let eliminationQueue = [];
 let eliminateTimer = null;
@@ -261,7 +319,6 @@ function updateCount() {
   countEl.classList.toggle('visible', state === 'eliminating');
 }
 
-// --- Elimination ---
 function startElimination() {
   if (state !== 'idle') return;
   state = 'eliminating';
@@ -290,7 +347,6 @@ function eliminateNext() {
   const target = eliminationQueue.shift();
   target.alive = false;
 
-  // Drift outward with gentle velocity
   const dir = target.basePos.clone().normalize();
   const tangent = new THREE.Vector3(
     (Math.random() - 0.5), (Math.random() - 0.5), (Math.random() - 0.5)
@@ -312,9 +368,7 @@ function eliminateNext() {
   else if (aliveCount > 3) delay = 300 + Math.random() * 200;
   else delay = 600 + Math.random() * 500;
 
-  // Slow down rotation as we narrow
   controls.autoRotateSpeed = 0.5 + (aliveCount / NAMES.length) * 2;
-
   eliminateTimer = setTimeout(eliminateNext, delay);
 }
 
@@ -336,7 +390,6 @@ function finishElimination() {
   function animateCamera() {
     const elapsed = performance.now() - startTime;
     const t = Math.min(elapsed / duration, 1);
-    // Smooth ease-out
     const ease = 1 - Math.pow(1 - t, 4);
 
     camera.position.lerpVectors(startPos, targetCamPos, ease);
@@ -346,7 +399,9 @@ function finishElimination() {
       requestAnimationFrame(animateCamera);
     } else {
       setTimeout(() => {
-        winnerNameEl.innerHTML = makeDropcapHTML(winnerData.name, winnerData.colorIndex);
+        const winColor = COLORS[winnerData.colorIndex % COLORS.length];
+        winnerOverlay.style.setProperty('--winner-color', winColor);
+        winnerNameEl.innerHTML = getStyledDropcap(winnerData.name, winnerData.colorIndex, true);
         winnerOverlay.classList.add('active');
       }, 300);
     }
@@ -354,7 +409,6 @@ function finishElimination() {
   animateCamera();
 }
 
-// --- Reset ---
 function reset() {
   clearTimeout(eliminateTimer);
   state = 'idle';
@@ -377,21 +431,45 @@ function reset() {
 pickBtn.addEventListener('click', startElimination);
 resetBtn.addEventListener('click', reset);
 
+// Click anywhere to start elimination (ignore drags/orbits and winner overlay clicks)
+let pointerDownPos = null;
+document.addEventListener('pointerdown', e => {
+  pointerDownPos = { x: e.clientX, y: e.clientY };
+});
+document.addEventListener('pointerup', e => {
+  if (!pointerDownPos) return;
+  const dx = e.clientX - pointerDownPos.x;
+  const dy = e.clientY - pointerDownPos.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  pointerDownPos = null;
+  // Only trigger on clean clicks (not drags/orbits), and not on overlay buttons
+  if (dist < 5 && state === 'idle' && !e.target.closest('.winner-overlay')) {
+    startElimination();
+  }
+});
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// --- Animate ---
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
 
+  const time = performance.now() * 0.002;
+
   nameObjects.forEach(n => {
+    if (n.alive) {
+      const bob = Math.sin(time + n.phaseOffset) * 2.5;
+      n.obj.position.y = n.basePos.y + bob;
+    }
+
     if (n.obj.parent) {
       n.obj.lookAt(camera.position);
     }
+
     if (!n.alive && n.obj.parent) {
       n.obj.position.add(n.velocity);
       n.velocity.multiplyScalar(0.96);
