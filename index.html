@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Name Chooser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=DM+Mono:wght@400&family=Jacquard+12&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #000;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #scene { width: 100%; height: 100%; position: fixed; inset: 0; }
+
+  /* Floating names — dropcap style */
+  .name-label {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    color: #eee;
+    text-align: center;
+    white-space: nowrap;
+    cursor: default;
+    letter-spacing: 0.2px;
+    backface-visibility: hidden;
+    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .name-label .dropcap {
+    font-family: 'Jacquard 12', serif;
+    font-size: 2em;
+    font-weight: 400;
+    line-height: 1;
+    vertical-align: baseline;
+  }
+  .name-label.eliminating {
+    opacity: 0 !important;
+    transform: scale(0.4) !important;
+    filter: blur(4px);
+    transition: opacity 0.7s cubic-bezier(0.4, 0, 1, 1),
+                transform 0.7s cubic-bezier(0.4, 0, 1, 1),
+                filter 0.7s ease;
+  }
+
+  /* Button */
+  .btn-area {
+    position: fixed; bottom: 0; left: 0; width: 100%;
+    display: flex; justify-content: center;
+    padding: 16px; z-index: 20; pointer-events: none;
+  }
+  .pick-btn {
+    pointer-events: all; cursor: pointer;
+    font-size: 32px;
+    color: #fff; background: none;
+    border: none;
+    padding: 0; border-radius: 0;
+    line-height: 1;
+    box-shadow: none;
+    transition: transform 0.3s cubic-bezier(0.16,1,0.3,1),
+                box-shadow 0.3s ease, opacity 0.5s ease;
+  }
+  .pick-btn:hover {
+    transform: scale(1.06);
+    filter: brightness(1.2);
+  }
+  .pick-btn:active { transform: scale(0.96); }
+  .pick-btn.hidden { opacity: 0; pointer-events: none; transform: scale(0.85); }
+
+  /* Winner overlay */
+  .winner-overlay {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 100; pointer-events: none;
+    opacity: 0;
+    background: rgba(0, 0, 0, 0.92);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .winner-overlay.active { opacity: 1; pointer-events: all; }
+
+  .winner-name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: clamp(48px, 8vw, 90px); font-weight: 500;
+    color: #eee; line-height: 1.15;
+    text-align: center; padding: 0 24px;
+    opacity: 0; transform: translateY(24px) scale(0.95);
+    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .winner-overlay.active .winner-name {
+    opacity: 1; transform: translateY(0) scale(1);
+    transition-delay: 0.2s;
+  }
+  .winner-name .dropcap {
+    font-family: 'Jacquard 12', serif;
+    font-size: 1.3em;
+    font-weight: 400;
+  }
+  .reset-btn {
+    cursor: pointer; margin-top: 28px;
+    font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 400;
+    color: #666; background: transparent;
+    border: 1px solid rgba(255,255,255,0.15); padding: 8px 22px; border-radius: 8px;
+    letter-spacing: 1px; text-transform: uppercase;
+    opacity: 0; transform: translateY(10px);
+    transition: opacity 0.5s ease, transform 0.5s ease,
+                color 0.2s ease, border-color 0.2s ease;
+  }
+  .winner-overlay.active .reset-btn {
+    opacity: 1; transform: translateY(0); transition-delay: 0.5s;
+  }
+  .reset-btn:hover { color: #eee; border-color: rgba(255,255,255,0.4); }
+
+  /* Count */
+  .count {
+    position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
+    font-family: 'DM Mono', monospace; font-weight: 400;
+    font-size: 11px; color: #aaa; letter-spacing: 2px; text-transform: uppercase;
+    z-index: 20; pointer-events: none;
+    opacity: 0; transition: opacity 0.5s ease;
+  }
+  .count.visible { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="scene"></div>
+<div class="count" id="count"></div>
+
+<div class="btn-area">
+  <button class="pick-btn" id="pickBtn">&#127922;</button>
+</div>
+
+<div class="winner-overlay" id="winnerOverlay">
+  <div class="winner-name" id="winnerName"></div>
+  <button class="reset-btn" id="resetBtn">Again</button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const NAMES = [
+  "Omar Abu Asad","Sara Adukia","Omid Aliahmadi",
+  "Rahul Chandiwala","Samira Chaudhry","Andy Chen","Eden Chen","Noah Choi",
+  "David Cibrian","Myla Dantona","Jeh-Lei Fan","Soly Fouerti","Riya Goenka",
+  "Kimi Han","Shaya Harari","Siddha Kanthi","Gurnoor Kaur","James Lai",
+  "Jessie Lee","Eric Li","Beckey Lin","Richard Lin","Jerry Liu",
+  "Michelle Liu","Steven Liu","Pranava Manthena","Brody Marcus","Jamie Mi",
+  "Han Nguyen","Alex Ning","Shuang Qiu","Lavinia Ragunath","Prisha Rai",
+  "Jaden Ramos","Zachary Rowen-Delson","Pranav Sarma","Justin Shieh",
+  "Cindy Song","Maxwell Verdiner","Bryan Wei","Luck Xing","Joseph Yan",
+  "Nina You","Eve Zheng"
+];
+
+// Bauhaus dropcap colors
+const COLORS = [
+  "#C1272D", "#1B3A8C", "#E8A623", "#D45B2C", "#2D6A4F",
+  "#8B1E3F", "#3C5B9A", "#B5651D", "#CC5803", "#2B4570",
+  "#A23B72", "#4A6741", "#D4A03C", "#C1272D", "#1B3A8C",
+];
+
+// Build dropcap HTML: only first letter of first name is styled
+function makeDropcapHTML(name, colorIndex) {
+  const color = COLORS[colorIndex % COLORS.length];
+  const first = name[0];
+  const rest = name.slice(1);
+  return `<span class="dropcap" style="color:${color}">${first}</span>${rest}`;
+}
+
+// --- Scene ---
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 5000);
+camera.position.z = 780;
+
+const renderer = new CSS3DRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.getElementById('scene').appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.enableZoom = true;
+controls.minDistance = 400;
+controls.maxDistance = 1600;
+controls.enablePan = false;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.5;
+
+// --- Sphere distribution ---
+const RADIUS = 310;
+const nameObjects = [];
+
+function fibSphere(i, total) {
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  const y = 1 - (i / (total - 1)) * 2;
+  const radiusAtY = Math.sqrt(1 - y * y);
+  const theta = goldenAngle * i;
+  return new THREE.Vector3(
+    Math.cos(theta) * radiusAtY * RADIUS,
+    y * RADIUS,
+    Math.sin(theta) * radiusAtY * RADIUS
+  );
+}
+
+function createNameObjects() {
+  NAMES.forEach((name, i) => {
+    const el = document.createElement('div');
+    el.className = 'name-label';
+    el.innerHTML = makeDropcapHTML(name, i);
+
+    const obj = new CSS3DObject(el);
+    const pos = fibSphere(i, NAMES.length);
+    obj.position.copy(pos);
+
+    scene.add(obj);
+    nameObjects.push({
+      obj, el, name,
+      colorIndex: i,
+      basePos: pos.clone(),
+      alive: true,
+      velocity: new THREE.Vector3(0, 0, 0),
+    });
+  });
+}
+createNameObjects();
+
+// --- State ---
+let state = 'idle';
+let eliminationQueue = [];
+let eliminateTimer = null;
+let winnerData = null;
+
+const pickBtn = document.getElementById('pickBtn');
+const winnerOverlay = document.getElementById('winnerOverlay');
+const winnerNameEl = document.getElementById('winnerName');
+const resetBtn = document.getElementById('resetBtn');
+const countEl = document.getElementById('count');
+
+function updateCount() {
+  const alive = nameObjects.filter(n => n.alive).length;
+  countEl.textContent = `${alive} remaining`;
+  countEl.classList.toggle('visible', state === 'eliminating');
+}
+
+// --- Elimination ---
+function startElimination() {
+  if (state !== 'idle') return;
+  state = 'eliminating';
+  pickBtn.classList.add('hidden');
+  controls.autoRotateSpeed = 2;
+
+  const shuffled = [...nameObjects];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  winnerData = shuffled[shuffled.length - 1];
+  eliminationQueue = shuffled.slice(0, -1);
+
+  updateCount();
+  eliminateNext();
+}
+
+function eliminateNext() {
+  if (eliminationQueue.length === 0) {
+    finishElimination();
+    return;
+  }
+
+  const target = eliminationQueue.shift();
+  target.alive = false;
+
+  // Drift outward with gentle velocity
+  const dir = target.basePos.clone().normalize();
+  const tangent = new THREE.Vector3(
+    (Math.random() - 0.5), (Math.random() - 0.5), (Math.random() - 0.5)
+  ).normalize();
+  target.velocity.copy(dir.multiplyScalar(2 + Math.random() * 3))
+    .add(tangent.multiplyScalar(1.5));
+
+  target.el.classList.add('eliminating');
+
+  setTimeout(() => { scene.remove(target.obj); }, 800);
+
+  updateCount();
+
+  const aliveCount = nameObjects.filter(n => n.alive).length;
+  let delay;
+  if (aliveCount > 25) delay = 60 + Math.random() * 30;
+  else if (aliveCount > 15) delay = 90 + Math.random() * 50;
+  else if (aliveCount > 8) delay = 150 + Math.random() * 100;
+  else if (aliveCount > 3) delay = 300 + Math.random() * 200;
+  else delay = 600 + Math.random() * 500;
+
+  // Slow down rotation as we narrow
+  controls.autoRotateSpeed = 0.5 + (aliveCount / NAMES.length) * 2;
+
+  eliminateTimer = setTimeout(eliminateNext, delay);
+}
+
+function finishElimination() {
+  state = 'done';
+  controls.autoRotateSpeed = 0.2;
+  countEl.classList.remove('visible');
+
+  const winnerPos = winnerData.obj.position.clone();
+  const targetCamPos = winnerPos.clone().normalize().multiplyScalar(RADIUS + 300);
+
+  const startPos = camera.position.clone();
+  const startTarget = controls.target.clone();
+  const startTime = performance.now();
+  const duration = 1600;
+
+  controls.autoRotate = false;
+
+  function animateCamera() {
+    const elapsed = performance.now() - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    // Smooth ease-out
+    const ease = 1 - Math.pow(1 - t, 4);
+
+    camera.position.lerpVectors(startPos, targetCamPos, ease);
+    controls.target.lerpVectors(startTarget, winnerPos, ease);
+
+    if (t < 1) {
+      requestAnimationFrame(animateCamera);
+    } else {
+      setTimeout(() => {
+        winnerNameEl.innerHTML = makeDropcapHTML(winnerData.name, winnerData.colorIndex);
+        winnerOverlay.classList.add('active');
+      }, 300);
+    }
+  }
+  animateCamera();
+}
+
+// --- Reset ---
+function reset() {
+  clearTimeout(eliminateTimer);
+  state = 'idle';
+
+  winnerOverlay.classList.remove('active');
+  pickBtn.classList.remove('hidden');
+  countEl.classList.remove('visible');
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 0.5;
+
+  nameObjects.forEach(n => scene.remove(n.obj));
+  nameObjects.length = 0;
+  createNameObjects();
+
+  camera.position.set(0, 0, 780);
+  camera.lookAt(0, 0, 0);
+  controls.target.set(0, 0, 0);
+}
+
+pickBtn.addEventListener('click', startElimination);
+resetBtn.addEventListener('click', reset);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// --- Animate ---
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+
+  nameObjects.forEach(n => {
+    if (n.obj.parent) {
+      n.obj.lookAt(camera.position);
+    }
+    if (!n.alive && n.obj.parent) {
+      n.obj.position.add(n.velocity);
+      n.velocity.multiplyScalar(0.96);
+    }
+  });
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
